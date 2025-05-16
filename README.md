@@ -39,7 +39,7 @@ docflow-core/
 
 ### Pré-requisitos
 
-- Python 3.9+
+- Python 3.12
 - Kafka em execução local (`localhost:9092`)
 - API externa compatível com OpenAI para Q&A (ex: DeepSeek, OpenRouter)
 
@@ -72,7 +72,6 @@ Envie uma mensagem para o tópico pdf-topic com um JSON como:
 
 ## 🧠 Tecnologias
 
-Python (3.12)
 FastAPI
 Kafka
 LangChain + FAISS

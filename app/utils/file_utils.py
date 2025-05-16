@@ -1,47 +1,67 @@
-import re, os
+import re
+import logging
+from typing import List, Tuple
 
-def extract_tables_and_replace(md_file, tables_output):
-    with open(md_file, "r", encoding="utf-8") as f:
-        content = f.read()
+logger = logging.getLogger("file-utils")
 
-    pattern = re.compile(r'(\n\|.+?\|\n(?:\|.+?\|\n)+)')
-    tables = pattern.findall(content)
+TABLE_PATTERN = re.compile(r'(\n\|.+?\|\n(?:\|.+?\|\n)+)')
+IGNORED_PATTERNS = [
+    r'<!-- image -->',
+    r'MINISTÉRIO DA EDUCAÇÃO',
+    r'PÁGINA \d+',
+]
 
-    tables_md = "# Tabelas Extras\n\n"
-    for i, t in enumerate(tables, 1):
-        tables_md += f"## Tabela {i}\n\n{t}\n\n"
-
-    with open(tables_output, "w", encoding="utf-8") as f:
-        f.write(tables_md)
-
-    for i, t in enumerate(tables, 1):
-        ref = f"\n[Ver Tabela {i} no arquivo de tabelas]({os.path.basename(tables_output)}#tabela-{i})\n"
-        content = content.replace(t, ref, 1)
-
-    with open(md_file, "w", encoding="utf-8") as f:
-        f.write(content)
-
-def process_markdown(input_file, output_file):
-    with open(input_file, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    processed = []
+def clean_markdown_lines(lines: List[str]) -> List[str]:
+    logger.debug("Limpando linhas do Markdown...")
+    cleaned_lines = []
     blank_line = False
 
     for line in lines:
-        if "<!-- image -->" in line or "MINISTÉRIO DA EDUCAÇÃO" in line or re.search(r'PÁGINA \d+', line):
+        if any(re.search(pattern, line) for pattern in IGNORED_PATTERNS):
             continue
 
         if line.strip() == "":
             if not blank_line:
-                processed.append("\n")
+                cleaned_lines.append("\n")
                 blank_line = True
         else:
-            processed.append(line)
+            cleaned_lines.append(line)
             blank_line = False
 
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.writelines(processed)
+    logger.debug(f"{len(cleaned_lines)} linhas restantes após limpeza")
+    return cleaned_lines
 
-    extract_tables_and_replace(output_file, os.path.join(os.path.dirname(output_file), "tables.md"))
+def extract_tables(content: str) -> List[str]:
+    tables = TABLE_PATTERN.findall(content)
+    logger.info(f"{len(tables)} tabelas encontradas no conteúdo")
+    return tables
+
+def create_tables_markdown(tables: List[str]) -> str:
+    logger.debug("Criando arquivo Markdown com tabelas extras...")
+    md = "# Tabelas Extras\n\n"
+    for i, table in enumerate(tables, 1):
+        md += f"## Tabela {i}\n\n{table}\n\n"
+    return md
+
+def replace_tables_with_references(content: str, tables: List[str]) -> str:
+    logger.debug("Substituindo tabelas por referências no conteúdo...")
+    for i, table in enumerate(tables, 1):
+        reference = f"\n[Ver Tabela {i} no arquivo de tabelas](tables.md#tabela-{i})\n"
+        content = content.replace(table, reference, 1)
+    return content
+
+def process_markdown(content: str) -> str:
+    logger.info("Processando conteúdo Markdown...")
+    raw_lines = content.splitlines(keepends=True)
+    cleaned_content = "".join(clean_markdown_lines(raw_lines))
+
+    tables = extract_tables(cleaned_content)
+
+    if tables:
+        tables_md = create_tables_markdown(tables)
+        updated_content = replace_tables_with_references(cleaned_content, tables)
+        logger.info("Markdown processado com referências de tabelas")
+        return updated_content, tables_md
+
+    logger.info("Markdown processado (sem tabelas)")
+    return cleaned_content, ""
