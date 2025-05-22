@@ -1,18 +1,4 @@
 services:
-  postgres:
-    image: postgres:15
-    container_name: postgres
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: docflow
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - backend
-
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: zookeeper
@@ -43,9 +29,6 @@ services:
       KAFKA_REPLICA_FETCH_MAX_BYTES: 52428800
     networks:
       - backend
-
-volumes:
-  postgres_data:
 
 networks:
   backend: {}

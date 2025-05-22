@@ -3,13 +3,15 @@ import requests
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
+from app.config.config import EMBEDDING_DEVICE, EMBEDDING_INDEX_PATH, EMBEDDING_MODEL, LLM_API_URL, LLM_MAX_TOKENS, LLM_MODEL, LLM_TEMPERATURE
+
 def query_embedding(prompt: str, document_id: str) -> str:
     embedder = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={"device": "cpu"}
+        model_name=EMBEDDING_MODEL,
+        model_kwargs={"device": EMBEDDING_DEVICE}
     )
 
-    index_path = f"./output/faiss_indexes/{document_id}"
+    index_path = f"{EMBEDDING_INDEX_PATH}/{document_id}"
     if not os.path.exists(index_path):
         return f"Índice FAISS para o documento {document_id} não encontrado."
 
@@ -22,16 +24,16 @@ def query_embedding(prompt: str, document_id: str) -> str:
     print(f"\n\nContexto encontrado: {context}\n\n")
 
     res = requests.post(
-        "http://localhost:1234/v1/chat/completions",
+        LLM_API_URL,
         headers={"Content-Type": "application/json"},
         json={
-            "model": "deepseek-r1-distill-qwen-14b",
+            "model": LLM_MODEL,
             "messages": [
                 {"role": "system", "content": "Você é um assistente que ajuda a responder perguntas em português com base nas informações fornecidas."},
                 {"role": "user", "content": f"{prompt}\nContexto:\n{context}"}
             ],
-            "temperature": 0.7,
-            "max_tokens": 4096,
+            "temperature": LLM_TEMPERATURE,
+            "max_tokens": LLM_MAX_TOKENS,
             "stream": False
         }
     )

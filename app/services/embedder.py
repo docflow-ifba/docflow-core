@@ -6,6 +6,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.document import Document
 from langchain.text_splitter import MarkdownTextSplitter
 
+from app.config.config import EMBEDDING_DEVICE, EMBEDDING_INDEX_PATH, EMBEDDING_MODEL
+
 logger = logging.getLogger("embedder")
 
 def extract_sections(md_content: str) -> List[Dict]:
@@ -38,18 +40,18 @@ def split_into_chunks(sections: List[Dict], doc_id: str) -> List[Document]:
     logger.info(f"{len(docs)} chunks gerados a partir das seções")
     return docs
 
-def embed_document(content: str, doc_id: str):
-    logger.info(f"Iniciando embedding do documento: {doc_id}")
+def embed_document(content: str, docflow_notice_id: str):
+    logger.info(f"Iniciando embedding do documento: {docflow_notice_id}")
     sections = extract_sections(content)
-    docs = split_into_chunks(sections, doc_id)
+    docs = split_into_chunks(sections, docflow_notice_id)
 
     logger.debug("Carregando modelo de embeddings...")
     embedder = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        model_kwargs={"device": "cpu"}
+        model_name=EMBEDDING_MODEL,
+        model_kwargs={"device": EMBEDDING_DEVICE}
     )
     logger.debug("Gerando vetor e salvando índice FAISS...")
     vs = FAISS.from_documents(docs, embedder)
-    index_path = f"./output/faiss_indexes/{doc_id}"
+    index_path = f"{EMBEDDING_INDEX_PATH}/{docflow_notice_id}"
     vs.save_local(index_path)
     logger.info(f"Índice FAISS salvo em: {index_path}")
