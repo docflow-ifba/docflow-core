@@ -36,13 +36,6 @@ def extract_tables(content: str) -> List[str]:
     logger.info(f"{len(tables)} tabelas encontradas no conteúdo")
     return tables
 
-def create_tables_markdown(tables: List[str]) -> str:
-    logger.debug("Criando arquivo Markdown com tabelas extras...")
-    md = "# Tabelas Extras\n\n"
-    for i, table in enumerate(tables, 1):
-        md += f"## Tabela {i}\n\n{table}\n\n"
-    return md
-
 def replace_tables_with_references(content: str, tables: List[str]) -> str:
     logger.debug("Substituindo tabelas por referências no conteúdo...")
     for i, table in enumerate(tables, 1):
@@ -50,18 +43,17 @@ def replace_tables_with_references(content: str, tables: List[str]) -> str:
         content = content.replace(table, reference, 1)
     return content
 
-def process_markdown(content: str) -> str:
+def process_markdown(content: str):
     logger.info("Processando conteúdo Markdown...")
     raw_lines = content.splitlines(keepends=True)
-    cleaned_content = "".join(clean_markdown_lines(raw_lines))
+    clean_md = "".join(clean_markdown_lines(raw_lines))
 
-    tables = extract_tables(cleaned_content)
+    tables = extract_tables(clean_md)
 
     if tables:
-        tables_md = create_tables_markdown(tables)
-        updated_content = replace_tables_with_references(cleaned_content, tables)
+        updated_content = replace_tables_with_references(clean_md, tables)
         logger.info("Markdown processado com referências de tabelas")
-        return updated_content, tables_md
+        return updated_content, tables
 
     logger.info("Markdown processado (sem tabelas)")
-    return cleaned_content, ""
+    return clean_md

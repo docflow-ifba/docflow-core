@@ -21,14 +21,16 @@ def process_pdf_and_convert(pdf_bytes: bytes, docflow_notice_id: str):
             format_options={InputFormat.PDF: PdfFormatOption()}
         )
         result = doc_converter.convert(temp_pdf_path)
-        md_content = result.document.export_to_markdown()
+        content_md = result.document.export_to_markdown()
         logger.info(f"Conversão do PDF '{docflow_notice_id}' para Markdown concluída")
     finally:
         os.remove(temp_pdf_path)
         logger.debug(f"PDF temporário removido: {temp_pdf_path}")
 
-    processed_md, tables_md = process_markdown(md_content)
+    clean_md, tables_md = process_markdown(content_md)
     logger.info(f"Markdown processado para '{docflow_notice_id}'")
 
-    embed_document(processed_md, docflow_notice_id)
+    embed_document(clean_md, docflow_notice_id)
     logger.info(f"Embeddings criados para o documento: {docflow_notice_id}")
+
+    return content_md, clean_md, tables_md

@@ -64,7 +64,7 @@ GET /query?prompt=como pagar a taxa de inscrição?
 ```
 
 ### 📤 Enviando PDF via Kafka
-Envie uma mensagem para o tópico pdf-topic com um JSON como:
+Envie uma mensagem para o tópico docflow-embed com um JSON como:
 
 ```json
 { "pdf_path": "./pdfs/edital_teste.pdf" }
