@@ -9,3 +9,5 @@ requests==2.32.3
 langchain-community==0.3.23
 psycopg2-binary==2.9.10
 langchain-cli==0.0.36
+accelerate==1.7.0
+llama-cpp-python==0.3.9

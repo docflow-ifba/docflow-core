@@ -13,8 +13,8 @@ producer = KafkaProducer(
     value_serializer=lambda v: json.dumps(v).encode('utf-8')
 )
 
-def send_result(message):
-    producer.send(KAFKA_EMBED_RESULT_TOPIC, value=message)
+def send_result(topic, message):
+    producer.send(topic, value=message)
     producer.flush()
 
     logger.info(f"✅ Enviado resultado para o tópico Kafka")
