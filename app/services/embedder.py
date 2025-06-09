@@ -1,5 +1,6 @@
 import logging
 from typing import List, Dict
+from functools import lru_cache
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.document import Document
@@ -10,7 +11,12 @@ logger = logging.getLogger("embedder")
 
 class DocumentEmbedder:
     def __init__(self):
-        self.embedder = HuggingFaceEmbeddings(
+        self.embedder = self._get_embedder()
+        self.text_splitter = MarkdownTextSplitter(chunk_size=1000, chunk_overlap=200)
+
+    @lru_cache(maxsize=1)
+    def _get_embedder(self):
+        return HuggingFaceEmbeddings(
             model_name=EMBEDDING_MODEL,
             model_kwargs={"device": EMBEDDING_DEVICE}
         )
@@ -25,29 +31,36 @@ class DocumentEmbedder:
         logger.debug("Extraindo seções do conteúdo Markdown...")
         sections = []
         current = None
+        
         for line in md_content.split('\n'):
             if line.startswith('## '):
-                if current: sections.append(current)
+                if current:
+                    current['content'] = '\n'.join(current['content']).strip()
+                    sections.append(current)
                 current = {'title': line[3:].strip(), 'content': []}
             elif current:
                 current['content'].append(line)
-        if current: sections.append(current)
-        for sec in sections:
-            sec['content'] = '\n'.join(sec['content']).strip()
+        
+        if current:
+            current['content'] = '\n'.join(current['content']).strip()
+            sections.append(current)
+        
         logger.info(f"{len(sections)} seções extraídas do Markdown")
         return sections
 
     def _split_into_chunks(self, sections: List[Dict], doc_id: str) -> List[Document]:
         logger.debug("Dividindo seções em chunks para embedding...")
-        splitter = MarkdownTextSplitter(chunk_size=1000, chunk_overlap=200)
         docs = []
+        
         for sec in sections:
-            chunks = splitter.create_documents([sec['content']])
-            for chunk in chunks:
-                docs.append(Document(page_content=chunk.page_content, metadata={
-                    'source': doc_id,
-                    'section': sec['title']
-                }))
+            chunks = self.text_splitter.create_documents([sec['content']])
+            docs.extend([
+                Document(
+                    page_content=chunk.page_content,
+                    metadata={'source': doc_id, 'section': sec['title']}
+                ) for chunk in chunks
+            ])
+        
         logger.info(f"{len(docs)} chunks gerados a partir das seções")
         return docs
 
