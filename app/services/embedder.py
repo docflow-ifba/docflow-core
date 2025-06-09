@@ -16,14 +16,12 @@ class DocumentEmbedder:
         )
 
     def embed_document(self, content: str, docflow_notice_id: str):
-        """Main method to process and embed a document"""
         logger.info(f"Iniciando embedding do documento: {docflow_notice_id}")
         sections = self._extract_sections(content)
         docs = self._split_into_chunks(sections, docflow_notice_id)
         self._create_and_save_index(docs, docflow_notice_id)
 
     def _extract_sections(self, md_content: str) -> List[Dict]:
-        """Extract sections from markdown content"""
         logger.debug("Extraindo seções do conteúdo Markdown...")
         sections = []
         current = None
@@ -40,7 +38,6 @@ class DocumentEmbedder:
         return sections
 
     def _split_into_chunks(self, sections: List[Dict], doc_id: str) -> List[Document]:
-        """Split sections into chunks for embedding"""
         logger.debug("Dividindo seções em chunks para embedding...")
         splitter = MarkdownTextSplitter(chunk_size=1000, chunk_overlap=200)
         docs = []
@@ -55,7 +52,6 @@ class DocumentEmbedder:
         return docs
 
     def _create_and_save_index(self, docs: List[Document], docflow_notice_id: str):
-        """Create and save FAISS index"""
         logger.debug("Gerando vetor e salvando índice FAISS...")
         vs = FAISS.from_documents(docs, self.embedder)
         index_path = f"{EMBEDDING_INDEX_PATH}/{docflow_notice_id}"

@@ -23,8 +23,6 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-
-      # 👇 Aumentar limites de tamanho de mensagem
       KAFKA_MESSAGE_MAX_BYTES: 52428800
       KAFKA_REPLICA_FETCH_MAX_BYTES: 52428800
     networks:

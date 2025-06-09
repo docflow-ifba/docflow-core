@@ -1,10 +1,10 @@
-# services/query_engine.py
 import os
 import json
 import logging
 import requests
 import numpy as np
-from typing import Generator, List, Optional, Dict, Tuple
+from typing import Generator, List, Optional
+from app.services.semantic_cache import SemanticCache
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from app.config.config import (
@@ -20,63 +20,6 @@ from app.dto.message_request import MessageRequestDTO
 
 logger = logging.getLogger("query-engine")
 
-class SemanticCache:
-    def __init__(self, embedder, similarity_threshold=0.85, max_cache_size=100):
-        self.embedder = embedder
-        self.similarity_threshold = similarity_threshold
-        self.max_cache_size = max_cache_size
-        self.cache: Dict[str, Dict[str, Tuple[np.ndarray, str, List[dict]]]] = {}  # document_id -> {query_hash: (embedding, response, context_docs)}
-        self.query_history: Dict[str, List[str]] = {}  # document_id -> [query_hash1, query_hash2, ...]
-
-    def _compute_embedding(self, text: str) -> np.ndarray:
-        return self.embedder.embed_query(text)
-    
-    def _compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
-        return np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
-    
-    def _get_query_hash(self, query: str) -> str:
-        return str(hash(query))
-    
-    def get(self, query: str, document_id: str) -> Optional[Tuple[str, List[dict]]]:
-        if document_id not in self.cache:
-            return None
-        
-        query_embedding = self._compute_embedding(query)
-        
-        best_match = None
-        best_similarity = 0
-        
-        for query_hash, (cached_embedding, response, context_docs) in self.cache[document_id].items():
-            similarity = self._compute_similarity(query_embedding, cached_embedding)
-            if similarity > self.similarity_threshold and similarity > best_similarity:
-                best_similarity = similarity
-                best_match = (response, context_docs)
-        
-        if best_match:
-            logger.info(f"Cache hit for document {document_id} with similarity {best_similarity:.4f}")
-            return best_match
-        
-        return None
-    
-    def put(self, query: str, document_id: str, response: str, context_docs: List[dict]):
-        if document_id not in self.cache:
-            self.cache[document_id] = {}
-            self.query_history[document_id] = []
-        
-        query_hash = self._get_query_hash(query)
-        query_embedding = self._compute_embedding(query)
-        
-        # Add to cache
-        self.cache[document_id][query_hash] = (query_embedding, response, context_docs)
-        self.query_history[document_id].append(query_hash)
-        
-        # Enforce cache size limit
-        if len(self.query_history[document_id]) > self.max_cache_size:
-            oldest_query_hash = self.query_history[document_id].pop(0)
-            if oldest_query_hash in self.cache[document_id]:
-                del self.cache[document_id][oldest_query_hash]
-                logger.info(f"Removed oldest entry from cache for document {document_id}")
-
 class QueryEngine:
     def __init__(self):
         self.embedder = HuggingFaceEmbeddings(
@@ -91,7 +34,6 @@ class QueryEngine:
         if messages is None:
             messages = []
 
-        # Check cache first
         cache_result = self.semantic_cache.get(prompt, document_id)
         if cache_result:
             cached_response, cached_docs = cache_result
@@ -99,7 +41,6 @@ class QueryEngine:
             yield cached_response
             return
 
-        # Cache miss, proceed with normal flow
         vector_store = self._load_vector_store(document_id)
         if vector_store is None:
             yield f"Índice FAISS para o documento {document_id} não encontrado."
@@ -109,13 +50,11 @@ class QueryEngine:
         context = self._build_context(docs)
         chat_messages = self._build_messages(prompt, context, messages)
 
-        # Collect the full response to cache it
         full_response = ""
         for chunk in self._stream_llm_response(chat_messages):
             full_response += chunk
             yield chunk
         
-        # Cache the response
         self.semantic_cache.put(prompt, document_id, full_response, [
             {"content": doc.page_content, "metadata": doc.metadata} for doc in docs
         ])

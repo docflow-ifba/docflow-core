@@ -1,53 +1,60 @@
-import faiss
 import numpy as np
+import logging
 from typing import Dict, Tuple, List, Optional
-import pickle
-import os
+
+logger = logging.getLogger("query-engine")
 
 class SemanticCache:
-    def __init__(self, embedding_model, similarity_threshold=0.85):
-        self.embedding_model = embedding_model
+    def __init__(self, embedder, similarity_threshold=0.85, max_cache_size=100):
+        self.embedder = embedder
         self.similarity_threshold = similarity_threshold
-        self.cache: Dict[int, Tuple[str, str, np.ndarray]] = {}  # id -> (query, response, embedding)
-        self.index = faiss.IndexFlatIP(768)  # dimensão do embedding
-        self.cache_file = "semantic_cache.pkl"
-        self.load_cache()
+        self.max_cache_size = max_cache_size
+        self.cache: Dict[str, Dict[str, Tuple[np.ndarray, str, List[dict]]]] = {}
+        self.query_history: Dict[str, List[str]] = {}
 
-    def get_embedding(self, text: str) -> np.ndarray:
-        return self.embedding_model.encode(text)
-
-    def add_to_cache(self, query: str, response: str) -> None:
-        embedding = self.get_embedding(query)
-        embedding = embedding / np.linalg.norm(embedding)
-
-        idx = len(self.cache)
-        self.cache[idx] = (query, response, embedding)
-        self.index.add(np.array([embedding], dtype=np.float32))
-        self.save_cache()
-
-    def find_similar_query(self, query: str) -> Optional[str]:
-        query_embedding = self.get_embedding(query)
-        query_embedding = query_embedding / np.linalg.norm(query_embedding)
-
-        if self.index.ntotal == 0:
+    def _compute_embedding(self, text: str) -> np.ndarray:
+        return self.embedder.embed_query(text)
+    
+    def _compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+        return np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
+    
+    def _get_query_hash(self, query: str) -> str:
+        return str(hash(query))
+    
+    def get(self, query: str, document_id: str) -> Optional[Tuple[str, List[dict]]]:
+        if document_id not in self.cache:
             return None
-
-        D, I = self.index.search(np.array([query_embedding], dtype=np.float32), 1)
-
-        if D[0][0] >= self.similarity_threshold:
-            cached_query, cached_response, _ = self.cache[int(I[0][0])]
-            return cached_response
-
+        
+        query_embedding = self._compute_embedding(query)
+        
+        best_match = None
+        best_similarity = 0
+        
+        for query_hash, (cached_embedding, response, context_docs) in self.cache[document_id].items():
+            similarity = self._compute_similarity(query_embedding, cached_embedding)
+            if similarity > self.similarity_threshold and similarity > best_similarity:
+                best_similarity = similarity
+                best_match = (response, context_docs)
+        
+        if best_match:
+            logger.info(f"Cache hit for document {document_id} with similarity {best_similarity:.4f}")
+            return best_match
+        
         return None
-
-    def save_cache(self) -> None:
-        with open(self.cache_file, 'wb') as f:
-            pickle.dump((self.cache, self.index), f)
-
-    def load_cache(self) -> None:
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file, 'rb') as f:
-                    self.cache, self.index = pickle.load(f)
-            except Exception as e:
-                print(f"Erro ao carregar cache: {e}")
+    
+    def put(self, query: str, document_id: str, response: str, context_docs: List[dict]):
+        if document_id not in self.cache:
+            self.cache[document_id] = {}
+            self.query_history[document_id] = []
+        
+        query_hash = self._get_query_hash(query)
+        query_embedding = self._compute_embedding(query)
+        
+        self.cache[document_id][query_hash] = (query_embedding, response, context_docs)
+        self.query_history[document_id].append(query_hash)
+        
+        if len(self.query_history[document_id]) > self.max_cache_size:
+            oldest_query_hash = self.query_history[document_id].pop(0)
+            if oldest_query_hash in self.cache[document_id]:
+                del self.cache[document_id][oldest_query_hash]
+                logger.info(f"Removed oldest entry from cache for document {document_id}")
