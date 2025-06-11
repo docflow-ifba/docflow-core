@@ -8,15 +8,12 @@ from app.services.message_handler import handle_embedding_message, handle_questi
 logger = logging.getLogger("kafka-consumer")
 
 @contextmanager
-def create_consumer(topic: str, group_id: str = 'docflow-core-consumer'):
+def create_consumer(topic: str):
     consumer = KafkaConsumer(
         topic,
         bootstrap_servers=KAFKA_URL,
         value_deserializer=lambda x: json.loads(x.decode('utf-8')),
-        group_id=group_id,
-        auto_offset_reset='latest',
-        enable_auto_commit=True,
-        consumer_timeout_ms=1000
+        group_id='docflow-core-consumer',
     )
     try:
         yield consumer

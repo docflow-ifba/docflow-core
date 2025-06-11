@@ -33,6 +33,7 @@ def handle_embedding_message(data: dict):
         }
         send_message(KAFKA_EMBED_RESULT_TOPIC, response)
     except Exception:
+        send_message(KAFKA_EMBED_RESULT_TOPIC, { "docflow_notice_id": docflow_notice_id, "error": "Erro ao processar PDF" })
         logger.exception(f"Erro ao processar PDF {docflow_notice_id}")
 
 def handle_question_message(data: dict):

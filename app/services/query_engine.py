@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import requests
+import time
 from typing import Generator, List, Optional
 from functools import lru_cache
 from app.services.semantic_cache import SemanticCache
@@ -36,7 +37,7 @@ class QueryEngine:
         if cache_result:
             cached_response, _ = cache_result
             logger.info(f"Usando resposta em cache para documento {document_id}")
-            yield cached_response
+            yield from self._simulate_stream(cached_response)
             return
 
         vector_store = self._load_vector_store(document_id)
@@ -54,12 +55,29 @@ class QueryEngine:
                 full_response += chunk
                 yield chunk
             
-            self.semantic_cache.put(prompt, document_id, full_response, [
-                {"content": doc.page_content, "metadata": doc.metadata} for doc in docs
-            ])
-        except Exception:
-            logger.exception(f"Erro ao processar consulta para documento {document_id}")
+            if full_response.strip():
+                self.semantic_cache.put(prompt, document_id, full_response, [
+                    {"content": doc.page_content, "metadata": doc.metadata} for doc in docs
+                ])
+                
+        except Exception as e:
+            logger.exception(f"Erro ao processar consulta para documento {document_id}: {e}")
             yield "Erro ao processar sua consulta."
+
+    def _simulate_stream(self, text: str, chunk_size: int = 10, delay: float = 0.05) -> Generator[str, None, None]:
+        words = []
+        for line in text.split('\n'):
+            words.extend(line.split())
+            words.append('\n')
+        if words and words[-1] == '\n':
+            words.pop()
+
+        for i in range(0, len(words), chunk_size):
+            chunk = " ".join(words[i:i + chunk_size])
+            if i > 0:
+                chunk = " " + chunk
+            yield chunk
+            time.sleep(delay)
 
     def _load_vector_store(self, document_id: str) -> Optional[FAISS]:
         if document_id in self.vector_stores:
@@ -70,20 +88,24 @@ class QueryEngine:
             logger.warning(f"Índice FAISS não encontrado para o documento: {document_id}")
             return None
 
-        vector_store = FAISS.load_local(index_path, self.embedder, allow_dangerous_deserialization=True)
-        self.vector_stores[document_id] = vector_store
-        return vector_store
+        try:
+            vector_store = FAISS.load_local(index_path, self.embedder, allow_dangerous_deserialization=True)
+            self.vector_stores[document_id] = vector_store
+            return vector_store
+        except Exception as e:
+            logger.error(f"Erro ao carregar vector store para {document_id}: {e}")
+            return None
 
     def _build_context(self, docs: list) -> str:
-        return "\n".join(
-            f"Seção: {doc.metadata.get('section', 'N/A')}\nConteúdo: {doc.page_content}"
+        return "\\n\\n".join(
+            f"Seção: {doc.metadata.get('section', 'N/A')}\\nConteúdo: {doc.page_content}"
             for doc in docs
         )
 
     def _build_messages(self, prompt: str, context: str, messages: List[MessageRequestDTO]) -> List[dict]:
         system_message = {
             "role": "system",
-            "content": f"Você é um assistente que responde perguntas com base no contexto abaixo.\n\nContexto:\n{context}"
+            "content": f"Você é um assistente que responde perguntas com base no contexto abaixo.\\n\\nContexto:\\n{context}"
         }
 
         if messages:
@@ -92,8 +114,8 @@ class QueryEngine:
             return [system_message] + user_messages
 
         return [
-            {"role": "system", "content": "Você é um assistente que responde perguntas com base no contexto abaixo."},
-            {"role": "user", "content": f"{prompt}\nContexto:\n{context}"}
+            system_message,
+            {"role": "user", "content": prompt}
         ]
 
     def _stream_llm_response(self, chat_messages: List[dict]) -> Generator[str, None, None]:
@@ -105,34 +127,54 @@ class QueryEngine:
             "stream": True
         }
 
+        logger.info(f"Enviando requisição para LLM: {LLM_API_URL}, payload: {payload}")
+
         try:
             with requests.post(
                 LLM_API_URL,
                 headers={"Content-Type": "application/json"},
                 json=payload,
                 stream=True,
-                timeout=30
+                timeout=60
             ) as response:
                 response.raise_for_status()
                 response.encoding = 'utf-8'
                 
                 for line in response.iter_lines(decode_unicode=True):
-                    if line and line.startswith("data:"):
-                        try:
-                            data = json.loads(line.replace("data: ", ""))
-                            content = data.get("choices", [{}])[0].get("delta", {}).get("content")
-                            if content:
-                                yield content
-                        except json.JSONDecodeError:
-                            continue
+                    if not line or not line.startswith("data:"):
+                        continue
+                        
+                    line_data = line.replace("data: ", "").strip()
+                    if line_data == "[DONE]":
+                        break
+                        
+                    try:
+                        data = json.loads(line_data)
+                        content = data.get("choices", [{}])[0].get("delta", {}).get("content")
+                        if content:
+                            yield content
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+                        
         except requests.RequestException as e:
             logger.error(f"Erro na requisição à LLM: {e}")
             yield "Erro ao obter resposta da IA."
 
 _engine_instance = None
+_engine_lock = None
+
+def get_query_engine() -> QueryEngine:
+    global _engine_instance, _engine_lock
+    if _engine_instance is None:
+        if _engine_lock is None:
+            import threading
+            _engine_lock = threading.Lock()
+        
+        with _engine_lock:
+            if _engine_instance is None:
+                _engine_instance = QueryEngine()
+    return _engine_instance
 
 def query_embedding_stream(prompt: str, document_id: str, messages: List[MessageRequestDTO] = None) -> Generator[str, None, None]:
-    global _engine_instance
-    if _engine_instance is None:
-        _engine_instance = QueryEngine()
-    yield from _engine_instance.query_embedding_stream(prompt, document_id, messages)
+    engine = get_query_engine()
+    yield from engine.query_embedding_stream(prompt, document_id, messages)
