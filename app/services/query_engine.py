@@ -105,7 +105,15 @@ class QueryEngine:
     def _build_messages(self, prompt: str, context: str, messages: List[MessageRequestDTO]) -> List[dict]:
         system_message = {
             "role": "system",
-            "content": f"Você é um assistente que responde perguntas com base no contexto abaixo.\\n\\nContexto:\\n{context}"
+            "content": f"""
+                Você é um assistente especializado em responder perguntas com base em documentos como editais e arquivos PDF oficiais. 
+                Use exclusivamente as informações fornecidas no contexto abaixo para formular respostas claras, precisas e úteis.
+
+                É OBRIGATÓRIO que toda a resposta seja redigida em PORTUGUÊS.
+
+                Contexto:
+                {context}
+            """
         }
 
         if messages:
