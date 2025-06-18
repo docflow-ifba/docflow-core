@@ -45,10 +45,10 @@ def extract_tables(content: str) -> List[str]:
     logger.info(f"{len(tables)} tabelas encontradas no conteúdo")
     return tables
 
-def replace_tables_with_references(content: str, tables: List[str]) -> str:
+def replace_tables_with_references(content: str, tables: List[str], docflow_notice_id: str) -> str:
     logger.debug("Substituindo tabelas por referências no conteúdo...")
     for i, table in enumerate(tables, 1):
-        reference = f"\n[Ver Tabela {i} no arquivo de tabelas](tables.md#tabela-{i})\n"
+        reference = f"\ndocflow_table_id: {docflow_notice_id}_{i}\n"
         content = content.replace(table, reference, 1)
     return content
 
@@ -56,7 +56,7 @@ def remove_lines_repeated_more_than_n(lines: List[str], n: int = 3) -> List[str]
     line_counts = Counter(lines)
     return [line for line in lines if line_counts[line] <= n]
 
-def process_markdown(content: str) -> Tuple[str, List[str]]:
+def process_markdown(content: str, docflow_notice_id: str) -> Tuple[str, List[str]]:
     logger.info("Processando conteúdo Markdown...")
     raw_lines = content.splitlines(keepends=True)
     
@@ -67,7 +67,7 @@ def process_markdown(content: str) -> Tuple[str, List[str]]:
     tables = extract_tables(clean_md)
 
     if tables:
-        updated_content = replace_tables_with_references(clean_md, tables)
+        updated_content = replace_tables_with_references(clean_md, tables, docflow_notice_id)
         logger.info("Markdown processado com referências de tabelas")
         return updated_content, tables
 
