@@ -1,6 +1,5 @@
 import base64
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from app.config.config import KAFKA_ANSWER_TOPIC, KAFKA_EMBED_RESULT_TOPIC
 from app.kafka.producer import send_message
 from app.services.pdf_processor import process_pdf_and_convert
@@ -23,13 +22,12 @@ def handle_embedding_message(data: dict):
     
     try:
         pdf_bytes = base64.b64decode(pdf_base64)
-        content_md, clean_md, tables_md = process_pdf_and_convert(pdf_bytes, docflow_notice_id)
+        content_md, clean_md = process_pdf_and_convert(pdf_bytes, docflow_notice_id)
 
         response = {
             "docflow_notice_id": docflow_notice_id,
             "content_md": content_md,
-            "clean_md": clean_md,
-            "tables_md": tables_md
+            "clean_md": clean_md
         }
         send_message(KAFKA_EMBED_RESULT_TOPIC, response)
     except Exception:
@@ -47,13 +45,12 @@ def handle_question_message(data: dict):
     docflow_notice_id = data["docflow_notice_id"]
     user_id = data["user_id"]
     answer_conversation_id = data["answer_conversation_id"]
-    messages = data.get("messages", [])
 
     logger.info(f"📄 Pergunta recebida: {question}")
 
     try:
         full_response = ""
-        for chunk in query_embedding_stream(question, docflow_notice_id, messages):
+        for chunk in query_embedding_stream(question, docflow_notice_id):
             full_response += chunk
             
             partial_response = {

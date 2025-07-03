@@ -20,12 +20,12 @@ class PdfProcessor:
         logger.info(f"Iniciando processamento do PDF: {docflow_notice_id}")
         
         content_md = self._convert_pdf_to_markdown(pdf_bytes)
-        clean_md, tables_md = process_markdown(content_md, docflow_notice_id)
+        clean_md = process_markdown(content_md)
 
         self.embedder.embed_document(clean_md, docflow_notice_id)
         logger.info(f"Embeddings criados para o documento: {docflow_notice_id}")
 
-        return content_md, clean_md, tables_md
+        return content_md, clean_md
 
     def _convert_pdf_to_markdown(self, pdf_bytes: bytes) -> str:
         temp_pdf_path = None

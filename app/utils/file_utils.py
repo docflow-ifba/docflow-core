@@ -5,7 +5,6 @@ from collections import Counter
 
 logger = logging.getLogger("file-utils")
 
-TABLE_PATTERN = re.compile(r'(\n\|.+?\|\n(?:\|.+?\|\n)+)', re.MULTILINE)
 IGNORED_PATTERNS = [
     re.compile(pattern) for pattern in [
         r'<!-- image -->',
@@ -20,7 +19,7 @@ IGNORED_PATTERNS = [
     ]
 ]
 
-def clean_markdown_lines(lines: List[str]) -> List[str]:
+def _clean_markdown_lines(lines: List[str]) -> List[str]:
     logger.debug("Limpando linhas do Markdown...")
     cleaned_lines = []
     blank_line = False
@@ -40,36 +39,17 @@ def clean_markdown_lines(lines: List[str]) -> List[str]:
     logger.debug(f"{len(cleaned_lines)} linhas restantes após limpeza")
     return cleaned_lines
 
-def extract_tables(content: str) -> List[str]:
-    tables = TABLE_PATTERN.findall(content)
-    logger.info(f"{len(tables)} tabelas encontradas no conteúdo")
-    return tables
-
-def replace_tables_with_references(content: str, tables: List[str], docflow_notice_id: str) -> str:
-    logger.debug("Substituindo tabelas por referências no conteúdo...")
-    for i, table in enumerate(tables, 1):
-        reference = f"\ndocflow_table_id: {docflow_notice_id}_{i}\n"
-        content = content.replace(table, reference, 1)
-    return content
-
-def remove_lines_repeated_more_than_n(lines: List[str], n: int = 3) -> List[str]:
+def _remove_lines_repeated_more_than_n(lines: List[str], n: int = 3) -> List[str]:
     line_counts = Counter(lines)
     return [line for line in lines if line_counts[line] <= n]
 
-def process_markdown(content: str, docflow_notice_id: str) -> Tuple[str, List[str]]:
+def process_markdown(content: str) -> Tuple[str, List[str]]:
     logger.info("Processando conteúdo Markdown...")
     raw_lines = content.splitlines(keepends=True)
     
-    cleaned_lines = clean_markdown_lines(raw_lines)
-    filtered_lines = remove_lines_repeated_more_than_n(cleaned_lines, n=3)
+    cleaned_lines = _clean_markdown_lines(raw_lines)
+    filtered_lines = _remove_lines_repeated_more_than_n(cleaned_lines, n=3)
     clean_md = "".join(filtered_lines)
 
-    tables = extract_tables(clean_md)
-
-    if tables:
-        updated_content = replace_tables_with_references(clean_md, tables, docflow_notice_id)
-        logger.info("Markdown processado com referências de tabelas")
-        return updated_content, tables
-
-    logger.info("Markdown processado (sem tabelas)")
-    return clean_md, []
+    logger.info("Markdown processado")
+    return clean_md
