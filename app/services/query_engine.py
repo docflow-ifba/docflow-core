@@ -45,7 +45,7 @@ class QueryEngine:
             yield f"Índice FAISS para o documento {document_id} não encontrado."
             return
 
-        docs = vector_store.similarity_search(prompt, k=3)
+        docs = vector_store.similarity_search(prompt, k=2)
         context = self._build_context(docs)
         chat_messages = self._build_messages(prompt, context, messages)
 

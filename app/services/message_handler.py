@@ -22,12 +22,12 @@ def handle_embedding_message(data: dict):
     
     try:
         pdf_bytes = base64.b64decode(pdf_base64)
-        content_md, clean_md = process_pdf_and_convert(pdf_bytes, docflow_notice_id)
+        content_md, chunks = process_pdf_and_convert(pdf_bytes, docflow_notice_id)
 
         response = {
             "docflow_notice_id": docflow_notice_id,
             "content_md": content_md,
-            "clean_md": clean_md
+            "chunks": [str(chunk) for chunk in chunks],
         }
         send_message(KAFKA_EMBED_RESULT_TOPIC, response)
     except Exception:

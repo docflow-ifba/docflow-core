@@ -42,7 +42,7 @@ class DocumentEmbedder:
             model_kwargs={"device": self.embedding_device}
         )
 
-    def embed_document(self, content: str, doc_id: str) -> None:
+    def embed_document(self, content: str, doc_id: str) -> List[Document]:
         logger.info(f"Iniciando embedding do documento: {doc_id}")
 
         docs = self._split_into_chunks(content, doc_id)
@@ -50,6 +50,8 @@ class DocumentEmbedder:
         self._create_and_save_index(docs, doc_id)
 
         logger.info(f"Embedding do documento {doc_id} concluído com sucesso")
+
+        return docs
 
     def _split_into_chunks(self, content: str, doc_id: str) -> List[Document]:
         logger.debug("Dividindo conteúdo em chunks para embedding...")
@@ -81,14 +83,6 @@ class DocumentEmbedder:
             ))
 
         logger.info(f"{len(docs)} chunks gerados a partir do conteúdo")
-
-        print("-" * 50)
-        for doc in docs:
-            print(doc.page_content)
-            print("\n")
-            print(doc.metadata)
-            print("\n\n\n\n\n\n")
-        print("-" * 50)
         
         return docs
 

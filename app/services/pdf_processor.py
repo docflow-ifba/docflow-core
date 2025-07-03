@@ -2,11 +2,12 @@ import os
 import tempfile
 import logging
 from pathlib import Path
+from typing import List
+from langchain_community.docstore.document import Document
 from docling.datamodel.base_models import InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from app.services.embedder import DocumentEmbedder
-from app.utils.file_utils import process_markdown
-
+\
 logger = logging.getLogger("pdf-processor")
 
 class PdfProcessor:
@@ -20,12 +21,11 @@ class PdfProcessor:
         logger.info(f"Iniciando processamento do PDF: {docflow_notice_id}")
         
         content_md = self._convert_pdf_to_markdown(pdf_bytes)
-        clean_md = process_markdown(content_md)
 
-        self.embedder.embed_document(clean_md, docflow_notice_id)
+        chunks = self.embedder.embed_document(content_md, docflow_notice_id)
         logger.info(f"Embeddings criados para o documento: {docflow_notice_id}")
 
-        return content_md, clean_md
+        return content_md, chunks
 
     def _convert_pdf_to_markdown(self, pdf_bytes: bytes) -> str:
         temp_pdf_path = None
@@ -46,7 +46,7 @@ class PdfProcessor:
 
 _processor_instance = None
 
-def process_pdf_and_convert(pdf_bytes: bytes, docflow_notice_id: str):
+def process_pdf_and_convert(pdf_bytes: bytes, docflow_notice_id: str) -> tuple[str, List[Document]]:
     global _processor_instance
     if _processor_instance is None:
         _processor_instance = PdfProcessor()
